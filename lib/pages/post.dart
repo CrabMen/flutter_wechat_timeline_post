@@ -151,7 +151,6 @@ class _PostEditPageState extends State<PostEditPage> {
           );
         },
         onWillAccept: (data) {
-          print('onWillAccept被调用');
           setState(() {
             isWillSort = true;
             targetAssetId = asset.id;
@@ -229,8 +228,13 @@ class _PostEditPageState extends State<PostEditPage> {
 
   //添加方法
   _onTap() async {
-    final List<AssetEntity>? result = await AssetPicker.pickAssets(context);
-    print(result?.length);
+    final List<AssetEntity>? result = await AssetPicker.pickAssets(context,
+            pickerConfig: AssetPickerConfig(
+                maxAssets: 9, selectedAssets: _selectedAsssets))
+        .then((value) {
+      print('执行回调');
+      print(value);
+    });
     if (result == null) return;
 
     setState(() {
