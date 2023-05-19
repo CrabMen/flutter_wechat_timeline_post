@@ -19,6 +19,10 @@ class _PostEditPageState extends State<PostEditPage> {
   bool isDraging = false;
   //是否将要删除
   bool isWillRemove = false;
+  //是否将要排序
+  bool isWillSort = false;
+  //拖拽排序时被拖拽到的target id
+  String targetAssetId = '';
 
 //图片列表
   Widget _buildPhotoList() {
@@ -26,7 +30,10 @@ class _PostEditPageState extends State<PostEditPage> {
       padding: const EdgeInsets.all(spacing),
       child: LayoutBuilder(
         builder: (BuildContext context, BoxConstraints constraints) {
-          var width = (constraints.maxWidth - spacing * 2) / 3;
+          var width = (constraints.maxWidth -
+                  spacing * 2 -
+                  imageBorderWidth * 2 * columnCount) /
+              columnCount;
           return Wrap(
             spacing: spacing,
             runSpacing: spacing,
@@ -34,7 +41,7 @@ class _PostEditPageState extends State<PostEditPage> {
               ..._selectedAsssets
                   .map((e) => _buildPhotoItem(e, width))
                   .toList(),
-              if (_selectedAsssets.length < 9) _buildAddbutton(width),
+              if (_selectedAsssets.length < maxAssets) _buildAddbutton(width),
             ],
           );
         },
@@ -45,21 +52,22 @@ class _PostEditPageState extends State<PostEditPage> {
   GestureDetector _buildAddbutton(double width) {
     return GestureDetector(
       onTap: _onTap,
-      child: Container(
-        color: Colors.black38,
-        width: width,
-        height: width,
-        child: const Icon(
-          Icons.add,
-          size: 48,
+      child: Padding(
+        padding: const EdgeInsets.all(imageBorderWidth),
+        child: Container(
+          decoration:
+              BoxDecoration(color: Colors.black12, borderRadius: radius),
+          width: width,
+          height: width,
+          child: const Icon(Icons.add, size: 48),
         ),
       ),
     );
   }
 
-  Widget _buildPhotoItem(AssetEntity e, double width) {
+  Widget _buildPhotoItem(AssetEntity asset, double width) {
     return Draggable(
-      data: e,
+      data: asset,
       //开始拖动
       onDragStarted: () => setState(() {
         isDraging = true;
@@ -67,20 +75,22 @@ class _PostEditPageState extends State<PostEditPage> {
       //拖动结束
       onDragEnd: (details) => setState(() {
         isDraging = false;
+        isWillSort = false;
       }),
-      //当dargable被放置到[DragTarget]接受时调用
-      onDragCompleted: () => setState(() {
-        // isWillRemove = true;
-      }),
-      //当dargable取消放置到[DragTarget]接受时调用
+      // //当dargable被放置到[DragTarget]接受时调用
+      // onDragCompleted: () => setState(() {
+      //   // isWillRemove = true;
+      // }),
+      // //当dargable取消放置到[DragTarget]接受时调用
       onDraggableCanceled: (velocity, offset) => setState(() {
         isDraging = false;
+        isWillSort = false;
       }),
       feedback: Container(
         clipBehavior: Clip.antiAlias,
-        decoration: BoxDecoration(borderRadius: BorderRadius.circular(4)),
+        decoration: BoxDecoration(borderRadius: radius),
         child: AssetEntityImage(
-          e,
+          asset,
           width: width,
           height: width,
           fit: BoxFit.cover,
@@ -89,35 +99,84 @@ class _PostEditPageState extends State<PostEditPage> {
       ),
       childWhenDragging: Container(
         clipBehavior: Clip.antiAlias,
-        decoration: BoxDecoration(borderRadius: BorderRadius.circular(4)),
-        child: AssetEntityImage(
-          e,
-          width: width,
-          height: width,
-          fit: BoxFit.cover,
-          isOriginal: false,
-          opacity: const AlwaysStoppedAnimation(0.5),
+        decoration: BoxDecoration(
+          borderRadius: radius,
+          border:
+              Border.all(width: imageBorderWidth, color: Colors.transparent),
         ),
-      ),
-      child: GestureDetector(
-        onTap: () {
-          Navigator.push(context, MaterialPageRoute(builder: (context) {
-            return GalleryWidget(
-                initialIndex: _selectedAsssets.indexOf(e),
-                items: _selectedAsssets);
-          }));
-        },
         child: Container(
           clipBehavior: Clip.antiAlias,
-          decoration: BoxDecoration(borderRadius: BorderRadius.circular(4)),
+          decoration: BoxDecoration(borderRadius: radius),
           child: AssetEntityImage(
-            e,
+            asset,
             width: width,
             height: width,
             fit: BoxFit.cover,
             isOriginal: false,
+            opacity: const AlwaysStoppedAnimation(0.5),
           ),
         ),
+      ),
+      child: DragTarget(
+        builder: (context, candidateData, rejectedData) {
+          return GestureDetector(
+            onTap: () {
+              Navigator.push(context, MaterialPageRoute(builder: (context) {
+                return GalleryWidget(
+                    initialIndex: _selectedAsssets.indexOf(asset),
+                    items: _selectedAsssets);
+              }));
+            },
+            child: Container(
+              clipBehavior: Clip.antiAlias,
+              decoration: BoxDecoration(
+                  borderRadius: radius,
+                  border: Border.all(
+                      color: (isWillSort && targetAssetId == asset.id)
+                          ? accentColor
+                          : Colors.transparent,
+                      width: imageBorderWidth)),
+              child: Container(
+                clipBehavior: Clip.antiAlias,
+                decoration: BoxDecoration(borderRadius: radius),
+                child: AssetEntityImage(
+                  asset,
+                  width: width,
+                  height: width,
+                  fit: BoxFit.cover,
+                  isOriginal: false,
+                ),
+              ),
+            ),
+          );
+        },
+        onWillAccept: (data) {
+          print('onWillAccept被调用');
+          setState(() {
+            isWillSort = true;
+            targetAssetId = asset.id;
+          });
+          return true;
+        },
+        onAccept: (data) {
+          //从队列中删除target
+          final int index = _selectedAsssets.indexOf(data as AssetEntity);
+          _selectedAsssets.removeAt(index);
+          //将拖拽对象插入到目标之前
+          final targetIndex = _selectedAsssets.indexOf(asset);
+          _selectedAsssets.insert(targetIndex, data);
+
+          setState(() {
+            isWillSort = false;
+            targetAssetId = '';
+          });
+        },
+        onLeave: (data) {
+          setState(() {
+            isWillSort = false;
+            targetAssetId = '';
+          });
+        },
       ),
     );
   }
